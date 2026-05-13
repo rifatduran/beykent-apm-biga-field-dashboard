@@ -2,7 +2,7 @@
 """
 biga_open_meteo_hourly.csv -> data/weather/biga_weather_dashboard.html
 
-Cikti yapisi `biga_dashboard.html` ile ayni: Chart.js 4.4.1, KPI kartlari, 6 grafik, ayni CSS.
+Cikti: Chart.js pano (orijinal 6 grafik + su/iklim özeti: kümülatif, sıcaklık genişliği, bulut/radyasyon). KPI +1.
 
   .venv/bin/pip install -r requirements-viz.txt
   .venv/bin/python generate_weather_dashboard.py
@@ -48,6 +48,15 @@ def daily_records(df: pd.DataFrame, kc: float) -> list[dict]:
         hum_avg = float(g["relative_humidity_2m"].mean())
         hum_hours_80 = int((g["relative_humidity_2m"] >= 80).sum())
         wind_avg = float(g["wind_speed_10m"].mean()) if "wind_speed_10m" in g else 0.0
+        tspan = round(tmax - tmin, 1)
+        cloud_avg = (
+            round(float(g["cloud_cover"].mean()), 1) if "cloud_cover" in g.columns else 0.0
+        )
+        sw_mean = (
+            round(float(g["shortwave_radiation"].mean()), 1)
+            if "shortwave_radiation" in g.columns
+            else 0.0
+        )
         risk = disease_risk(hum_hours_80, tavg, hum_avg)
         rows.append(
             {
@@ -55,16 +64,32 @@ def daily_records(df: pd.DataFrame, kc: float) -> list[dict]:
                 "tmin": round(tmin, 1),
                 "tmax": round(tmax, 1),
                 "tavg": round(tavg, 1),
+                "tspan": tspan,
                 "hum_avg": round(hum_avg, 1),
                 "hum_hours_80": hum_hours_80,
                 "precip": round(precip, 1),
                 "et0": round(et0, 2),
+                "etc": round(etc, 2),
                 "irrigation_needed": need,
                 "wind_avg": round(wind_avg, 1),
+                "cloud_avg": cloud_avg,
+                "sw_mean": sw_mean,
                 "disease_risk": risk,
             }
         )
+    add_cumulative_sums(rows)
     return rows
+
+
+def add_cumulative_sums(records: list[dict]) -> None:
+    cp = ce = cn = 0.0
+    for r in records:
+        cp += r["precip"]
+        ce += r["et0"]
+        cn += r["irrigation_needed"]
+        r["cum_precip"] = round(cp, 1)
+        r["cum_et0"] = round(ce, 1)
+        r["cum_irr_need"] = round(cn, 1)
 
 
 def disease_risk(hum_hours_80: int, tavg: float, hum_avg: float) -> str:
@@ -82,12 +107,14 @@ def kpis(records: list[dict]) -> dict[str, float | int]:
     irr_total = sum(r["irrigation_needed"] for r in records)
     high_days = sum(1 for r in records if r["disease_risk"] == "HIGH")
     rain_days = sum(1 for r in records if r["precip"] > 0.05)
+    tspan_avg = sum(r["tspan"] for r in records) / max(len(records), 1)
     return {
         "precip_total": round(precip_total, 0),
         "et0_total": round(et0_total, 0),
         "irr_total": round(irr_total, 0),
         "high_days": int(high_days),
         "rain_days": int(rain_days),
+        "tspan_avg": round(tspan_avg, 1),
     }
 
 
@@ -310,6 +337,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="label">Yağışlı gün</div>
     <div class="value blue">%(kpi_rain_days)s <small style="font-size:14px;font-weight:400">gün</small></div>
   </div>
+  <div class="kpi">
+    <div class="label">Ort. günlük sıcaklık genişliği</div>
+    <div class="value amber">%(kpi_tspan_avg)s <small style="font-size:14px;font-weight:400">°C</small></div>
+  </div>
 </div>
 
 <div class="charts-grid">
@@ -318,7 +349,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="chart-header">
       <div>
         <div class="chart-title">Günlük Sıcaklık Bandı</div>
-        <div class="chart-sub">Min / Ortalama / Max · °C</div>
+        <div class="chart-sub">Min / Ortalama / Max · °C · tarih ekseni GG.AA.YYYY</div>
       </div>
     </div>
     <div class="legend">
@@ -410,6 +441,68 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
   </div>
 
+  <div class="chart-card full-width">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Kümülatif yağış ve ET₀</div>
+        <div class="chart-sub">Sezon boyunca birikim · mm · sulama–iklim dengesi özeti</div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#378add;"></span>Kümülatif yağış</span>
+      <span><span class="dot" style="background:#ef9f27;"></span>Kümülatif ET₀</span>
+    </div>
+    <div class="chart-wrap" style="height:240px;">
+      <canvas id="c7" role="img" aria-label="Kümülatif yağış ve ET0"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Günlük sıcaklık genişliği</div>
+        <div class="chart-sub">Max − Min · °C · ani sıcaklık dalgalanması</div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#6d4c41;"></span>Günlük fark</span>
+    </div>
+    <div class="chart-wrap" style="height:210px;">
+      <canvas id="c8" role="img" aria-label="Sıcaklık genişliği"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Kümülatif net sulama ihtiyacı</div>
+        <div class="chart-sub">Günlük max(0, ETc−yağış) birikimi · mm · Kc=%(kc)s</div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#1a7a52;"></span>Birikimli ihtiyaç</span>
+    </div>
+    <div class="chart-wrap" style="height:210px;">
+      <canvas id="c9" role="img" aria-label="Kümülatif sulama ihtiyacı"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-card full-width">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Bulutluluk ve kısa dalga radyasyon</div>
+        <div class="chart-sub">Günlük ortalama · %% bulut · W/m² (saatlik ort.)</div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#78909c;"></span>Bulutluluk</span>
+      <span><span class="dot" style="background:#f9a825;"></span>Kısa dalga</span>
+    </div>
+    <div class="chart-wrap" style="height:240px;">
+      <canvas id="c10" role="img" aria-label="Bulut ve radyasyon"></canvas>
+    </div>
+  </div>
+
 </div>
 
 <footer>
@@ -420,8 +513,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <script>
 const DATA = %(data_json)s;
 
-const labels = DATA.map(d => d.date.slice(5));
-const tickCfg = { autoSkip: true, maxTicksLimit: 10, font: { size: 11 }, color: '#999' };
+const labels = DATA.map(d => {
+  const parts = d.date.split('-');
+  return `${parts[2]}.${parts[1]}.${parts[0]}`;
+});
+const tickCfg = { autoSkip: true, maxTicksLimit: 12, font: { size: 10 }, color: '#999', maxRotation: 50 };
 const gridCfg = { color: 'rgba(0,0,0,0.06)' };
 const baseOpts = (yLabel) => ({
   responsive: true,
@@ -499,6 +595,76 @@ new Chart(document.getElementById('c6'), {
   }]},
   options: baseOpts('km/sa')
 });
+
+new Chart(document.getElementById('c7'), {
+  type: 'line',
+  data: { labels, datasets: [
+    { label: 'Kümülatif yağış', data: DATA.map(d=>d.cum_precip), borderColor:'#378add', borderWidth:2, pointRadius:0, fill:false, tension:0.2 },
+    { label: 'Kümülatif ET₀', data: DATA.map(d=>d.cum_et0), borderColor:'#ef9f27', borderWidth:2, pointRadius:0, fill:false, tension:0.2 }
+  ]},
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+      tooltip: { mode: 'index', intersect: false, bodyFont: { size: 12 }, titleFont: { size: 12 } }
+    },
+    scales: {
+      x: { ticks: tickCfg, grid: { display: false } },
+      y: { ticks: tickCfg, grid: gridCfg, title: { display: true, text: 'mm (birikimli)', font: { size: 11 }, color: '#aaa' } }
+    }
+  }
+});
+
+new Chart(document.getElementById('c8'), {
+  type: 'line',
+  data: { labels, datasets: [{
+    label: 'Max−Min',
+    data: DATA.map(d=>d.tspan),
+    borderColor:'#6d4c41', backgroundColor:'rgba(109,76,65,0.1)', borderWidth:2, pointRadius:0, fill:true, tension:0.3
+  }]},
+  options: baseOpts('°C')
+});
+
+new Chart(document.getElementById('c9'), {
+  type: 'line',
+  data: { labels, datasets: [{
+    label: 'Birikim',
+    data: DATA.map(d=>d.cum_irr_need),
+    borderColor:'#1a7a52', backgroundColor:'rgba(26,122,82,0.12)', borderWidth:2, pointRadius:0, fill:true, tension:0.25
+  }]},
+  options: baseOpts('mm (birikimli)')
+});
+
+new Chart(document.getElementById('c10'), {
+  type: 'line',
+  data: { labels, datasets: [
+    { label: 'Bulutluluk', data: DATA.map(d=>d.cloud_avg), borderColor:'#78909c', backgroundColor:'rgba(120,144,156,0.06)', borderWidth:2, pointRadius:0, fill:true, tension:0.3, yAxisID: 'y' },
+    { label: 'Kısa dalga', data: DATA.map(d=>d.sw_mean), borderColor:'#f9a825', borderWidth:2, pointRadius:0, fill:false, tension:0.3, yAxisID: 'y1' }
+  ]},
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+      tooltip: { mode: 'index', intersect: false, bodyFont: { size: 12 }, titleFont: { size: 12 } }
+    },
+    scales: {
+      x: { ticks: tickCfg, grid: { display: false } },
+      y: {
+        type: 'linear', display: true, position: 'left',
+        ticks: tickCfg, grid: gridCfg,
+        min: 0, max: 100,
+        title: { display: true, text: 'Bulut %%', font: { size: 11 }, color: '#78909c' }
+      },
+      y1: {
+        type: 'linear', display: true, position: 'right',
+        ticks: tickCfg, grid: { drawOnChartArea: false },
+        title: { display: true, text: 'W/m²', font: { size: 11 }, color: '#f9a825' }
+      }
+    }
+  }
+});
 </script>
 </body>
 </html>
@@ -553,6 +719,7 @@ def main() -> int:
         "kpi_irr": int(k["irr_total"]),
         "kpi_high": k["high_days"],
         "kpi_rain_days": k["rain_days"],
+        "kpi_tspan_avg": k["tspan_avg"],
         "kc": args.kc,
         "footer_data": footer_data,
         "data_json": json.dumps(records, ensure_ascii=False),
