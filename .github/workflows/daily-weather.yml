@@ -1,0 +1,57 @@
+# Her gün Open-Meteo çeker ve public/ içindeki site dosyalarını günceller.
+# Vercel repo ile bağlıysa yeni commit otomatik deploy tetikler.
+name: Daily weather refresh
+
+on:
+  schedule:
+    # 06:15 UTC ≈ 09:15 TR (yaz saati değişebilir)
+    - cron: "15 6 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: weather-refresh
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-viz.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-viz.txt
+
+      - name: Fetch Open-Meteo → CSV
+        run: |
+          python biga_open_meteo_weather.py \
+            --forecast-days 16
+
+      - name: Build Chart.js dashboard → public/
+        run: |
+          mkdir -p public/weather
+          python generate_weather_dashboard.py \
+            -i data/weather/biga_open_meteo_hourly.csv \
+            -o public/weather/biga_weather_dashboard.html
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/weather/biga_open_meteo_hourly.csv public/weather/biga_weather_dashboard.html
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "chore(weather): günlük Open-Meteo ve dashboard güncellemesi"
+          git push

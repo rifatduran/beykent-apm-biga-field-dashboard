@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Biga Ovası — Hava Durumu Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #f5f4f0;
+    color: #1a1a18;
+    min-height: 100vh;
+    padding: 2rem 1.5rem;
+  }
+
+  header {
+    margin-bottom: 2rem;
+  }
+
+  header .tag {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: #1a1a18;
+    color: #f5f4f0;
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+  }
+
+  header h1 {
+    font-size: 26px;
+    font-weight: 600;
+    color: #1a1a18;
+    line-height: 1.2;
+  }
+
+  header p {
+    font-size: 13px;
+    color: #6b6a65;
+    margin-top: 6px;
+  }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 2rem;
+  }
+
+  .kpi {
+    background: #fff;
+    border: 0.5px solid #d8d7d0;
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+  }
+
+  .kpi .label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+
+  .kpi .value {
+    font-size: 24px;
+    font-weight: 600;
+    color: #1a1a18;
+    line-height: 1;
+  }
+
+  .kpi .value.danger { color: #c0392b; }
+  .kpi .value.blue   { color: #1a5fa8; }
+  .kpi .value.green  { color: #1a7a52; }
+  .kpi .value.amber  { color: #9a6200; }
+
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  @media (max-width: 800px) {
+    .charts-grid { grid-template-columns: 1fr; }
+  }
+
+  .chart-card {
+    background: #fff;
+    border: 0.5px solid #d8d7d0;
+    border-radius: 12px;
+    padding: 1.25rem 1.4rem 1.1rem;
+  }
+
+  .chart-card.full-width {
+    grid-column: 1 / -1;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 12px;
+  }
+
+  .chart-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a1a18;
+  }
+
+  .chart-sub {
+    font-size: 11px;
+    color: #999;
+    margin-top: 2px;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .legend span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: #666;
+  }
+
+  .legend .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .legend .line {
+    width: 16px;
+    height: 2px;
+    flex-shrink: 0;
+  }
+
+  .chart-wrap {
+    position: relative;
+    width: 100%;
+  }
+
+  footer {
+    margin-top: 2rem;
+    font-size: 11px;
+    color: #aaa;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="tag">APM Group 8 — Beykent Üniversitesi</div>
+  <h1>Biga Ovası Hava Durumu Dashboard</h1>
+  <p>Domates tarlası · 40.17°N 27.22°E · 1 Nisan – 20 Mayıs 2026 · Open-Meteo arşiv verisi</p>
+</header>
+
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="label">Toplam yağış</div>
+    <div class="value blue">120 <small style="font-size:14px;font-weight:400">mm</small></div>
+  </div>
+  <div class="kpi">
+    <div class="label">Toplam ET₀</div>
+    <div class="value amber">165 <small style="font-size:14px;font-weight:400">mm</small></div>
+  </div>
+  <div class="kpi">
+    <div class="label">Net sulama ihtiyacı</div>
+    <div class="value green">156 <small style="font-size:14px;font-weight:400">mm</small></div>
+  </div>
+  <div class="kpi">
+    <div class="label">Yüksek hastalık riski</div>
+    <div class="value danger">22 <small style="font-size:14px;font-weight:400">gün</small></div>
+  </div>
+  <div class="kpi">
+    <div class="label">Yağışlı gün</div>
+    <div class="value blue">26 <small style="font-size:14px;font-weight:400">gün</small></div>
+  </div>
+</div>
+
+<div class="charts-grid">
+
+  <!-- 1. Sıcaklık -->
+  <div class="chart-card full-width">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Günlük Sıcaklık Bandı</div>
+        <div class="chart-sub">Min / Ortalama / Max · °C</div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#e05252;"></span>Max sıcaklık</span>
+      <span><span class="dot" style="background:#1d9e75;"></span>Ortalama</span>
+      <span><span class="dot" style="background:#378add;"></span>Min sıcaklık</span>
+    </div>
+    <div class="chart-wrap" style="height:220px;">
+      <canvas id="c1" role="img" aria-label="50 günlük min, ortalama ve max sıcaklık">Nisan–Mayıs 2026 Biga sıcaklık verileri.</canvas>
+    </div>
+  </div>
+
+  <!-- 2. Yağış vs Sulama -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Yağış vs. Sulama İhtiyacı</div>
+        <div class="chart-sub">Günlük · mm</div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#378add;"></span>Yağış</span>
+      <span><span class="dot" style="background:#1d9e75;"></span>Sulama ihtiyacı (ETc−yağış)</span>
+    </div>
+    <div class="chart-wrap" style="height:210px;">
+      <canvas id="c2" role="img" aria-label="Yağış ve sulama ihtiyacı karşılaştırması">Yağış ve sulama ihtiyacı zaman serisi.</canvas>
+    </div>
+  </div>
+
+  <!-- 3. Nem -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Bağıl Nem + Mildiyö Eşiği</div>
+        <div class="chart-sub">Günlük ortalama · %</div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#7f77dd;"></span>Ortalama nem</span>
+      <span><span class="line" style="background:#e05252; border-top: 2px dashed #e05252;"></span>%80 eşiği</span>
+    </div>
+    <div class="chart-wrap" style="height:210px;">
+      <canvas id="c3" role="img" aria-label="Bağıl nem ve 80 yüzde mildiyö risk eşiği">Bağıl nem zaman serisi.</canvas>
+    </div>
+  </div>
+
+  <!-- 4. Hastalık Riski -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Mildiyö Hastalık Riski</div>
+        <div class="chart-sub">Nem ≥%80 saati / gün · Tom-Cast tabanlı</div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#e05252;"></span>Yüksek</span>
+      <span><span class="dot" style="background:#ef9f27;"></span>Orta</span>
+      <span><span class="dot" style="background:#639922;"></span>Düşük</span>
+    </div>
+    <div class="chart-wrap" style="height:210px;">
+      <canvas id="c4" role="img" aria-label="Günlük mildiyö risk kategorisi">Tom-Cast tabanlı hastalık riski.</canvas>
+    </div>
+  </div>
+
+  <!-- 5. ET0 -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">ET₀ — Referans Evapotranspirasyon</div>
+        <div class="chart-sub">FAO Penman-Monteith · mm/gün</div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#ef9f27;"></span>ET₀ (mm/gün)</span>
+    </div>
+    <div class="chart-wrap" style="height:210px;">
+      <canvas id="c5" role="img" aria-label="Günlük ET0 değerleri">ET₀ zaman serisi.</canvas>
+    </div>
+  </div>
+
+  <!-- 6. Rüzgar -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Ortalama Rüzgar Hızı</div>
+        <div class="chart-sub">Günlük ortalama · km/sa</div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#888780;"></span>Rüzgar hızı</span>
+    </div>
+    <div class="chart-wrap" style="height:210px;">
+      <canvas id="c6" role="img" aria-label="Günlük ortalama rüzgar hızı">Rüzgar hızı zaman serisi.</canvas>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Veri kaynağı: Open-Meteo Archive API · Koordinat: 40.17°N, 27.22°E · Kc=1.15 (domates meyve dönemi) · Hastalık riski: Tom-Cast (nem≥%80 saat sayısı + sıcaklık aralığı 10–24°C)
+</footer>
+
+<script>
+const DATA = [{"date":"2026-04-01","tmin":9.5,"tmax":17.6,"tavg":12.9,"hum_avg":80.3,"hum_hours_80":12,"precip":13.4,"et0":2.16,"irrigation_needed":0,"wind_avg":13.3,"disease_risk":"HIGH"},{"date":"2026-04-02","tmin":10.0,"tmax":17.4,"tavg":13.5,"hum_avg":77.2,"hum_hours_80":10,"precip":7.7,"et0":2.91,"irrigation_needed":0,"wind_avg":18.5,"disease_risk":"HIGH"},{"date":"2026-04-03","tmin":10.9,"tmax":16.8,"tavg":13.6,"hum_avg":72.2,"hum_hours_80":4,"precip":0.4,"et0":3.1,"irrigation_needed":3.17,"wind_avg":17.4,"disease_risk":"MEDIUM"},{"date":"2026-04-04","tmin":10.1,"tmax":15.9,"tavg":12.5,"hum_avg":87.6,"hum_hours_80":21,"precip":14.5,"et0":2.05,"irrigation_needed":0,"wind_avg":8.2,"disease_risk":"HIGH"},{"date":"2026-04-05","tmin":10.3,"tmax":16.2,"tavg":12.6,"hum_avg":85.1,"hum_hours_80":16,"precip":0.4,"et0":2.58,"irrigation_needed":2.57,"wind_avg":11.7,"disease_risk":"HIGH"},{"date":"2026-04-06","tmin":7.0,"tmax":17.4,"tavg":12.4,"hum_avg":68.9,"hum_hours_80":9,"precip":0.0,"et0":3.43,"irrigation_needed":3.94,"wind_avg":5.5,"disease_risk":"HIGH"},{"date":"2026-04-07","tmin":10.7,"tmax":21.8,"tavg":16.1,"hum_avg":59.5,"hum_hours_80":0,"precip":0.0,"et0":4.18,"irrigation_needed":4.81,"wind_avg":9.8,"disease_risk":"LOW"},{"date":"2026-04-08","tmin":8.7,"tmax":17.3,"tavg":14.0,"hum_avg":62.7,"hum_hours_80":2,"precip":0.9,"et0":3.62,"irrigation_needed":3.26,"wind_avg":13.2,"disease_risk":"LOW"},{"date":"2026-04-09","tmin":4.8,"tmax":12.7,"tavg":8.7,"hum_avg":63.0,"hum_hours_80":0,"precip":0.3,"et0":2.18,"irrigation_needed":2.21,"wind_avg":6.1,"disease_risk":"LOW"},{"date":"2026-04-10","tmin":4.9,"tmax":11.3,"tavg":8.2,"hum_avg":75.0,"hum_hours_80":8,"precip":0.1,"et0":1.84,"irrigation_needed":2.02,"wind_avg":5.7,"disease_risk":"MEDIUM"},{"date":"2026-04-11","tmin":2.7,"tmax":13.1,"tavg":7.8,"hum_avg":76.9,"hum_hours_80":9,"precip":0.0,"et0":2.91,"irrigation_needed":3.35,"wind_avg":7.0,"disease_risk":"MEDIUM"},{"date":"2026-04-12","tmin":4.5,"tmax":13.5,"tavg":9.1,"hum_avg":65.5,"hum_hours_80":3,"precip":0.0,"et0":3.0,"irrigation_needed":3.45,"wind_avg":5.8,"disease_risk":"MEDIUM"},{"date":"2026-04-13","tmin":4.3,"tmax":15.6,"tavg":9.9,"hum_avg":66.2,"hum_hours_80":4,"precip":0.0,"et0":3.32,"irrigation_needed":3.82,"wind_avg":8.1,"disease_risk":"MEDIUM"},{"date":"2026-04-14","tmin":6.4,"tmax":16.6,"tavg":11.3,"hum_avg":75.9,"hum_hours_80":11,"precip":0.7,"et0":2.79,"irrigation_needed":2.51,"wind_avg":6.2,"disease_risk":"HIGH"},{"date":"2026-04-15","tmin":9.9,"tmax":16.5,"tavg":12.7,"hum_avg":78.3,"hum_hours_80":12,"precip":0.1,"et0":2.57,"irrigation_needed":2.86,"wind_avg":7.5,"disease_risk":"HIGH"},{"date":"2026-04-16","tmin":8.8,"tmax":15.5,"tavg":11.2,"hum_avg":84.0,"hum_hours_80":13,"precip":0.0,"et0":2.08,"irrigation_needed":2.39,"wind_avg":10.9,"disease_risk":"HIGH"},{"date":"2026-04-17","tmin":8.5,"tmax":14.0,"tavg":10.8,"hum_avg":83.9,"hum_hours_80":13,"precip":0.0,"et0":2.16,"irrigation_needed":2.48,"wind_avg":18.2,"disease_risk":"HIGH"},{"date":"2026-04-18","tmin":10.2,"tmax":16.3,"tavg":12.4,"hum_avg":75.6,"hum_hours_80":13,"precip":0.0,"et0":3.31,"irrigation_needed":3.81,"wind_avg":17.6,"disease_risk":"HIGH"},{"date":"2026-04-19","tmin":7.0,"tmax":16.7,"tavg":11.9,"hum_avg":78.1,"hum_hours_80":10,"precip":0.1,"et0":3.43,"irrigation_needed":3.84,"wind_avg":6.0,"disease_risk":"HIGH"},{"date":"2026-04-20","tmin":7.6,"tmax":20.3,"tavg":14.1,"hum_avg":64.5,"hum_hours_80":0,"precip":0.0,"et0":3.98,"irrigation_needed":4.58,"wind_avg":4.9,"disease_risk":"LOW"},{"date":"2026-04-21","tmin":12.1,"tmax":20.8,"tavg":15.9,"hum_avg":70.7,"hum_hours_80":4,"precip":1.5,"et0":3.72,"irrigation_needed":2.78,"wind_avg":6.7,"disease_risk":"MEDIUM"},{"date":"2026-04-22","tmin":8.6,"tmax":12.4,"tavg":10.5,"hum_avg":94.3,"hum_hours_80":24,"precip":11.9,"et0":0.69,"irrigation_needed":0,"wind_avg":12.7,"disease_risk":"HIGH"},{"date":"2026-04-23","tmin":7.8,"tmax":13.0,"tavg":9.8,"hum_avg":82.9,"hum_hours_80":12,"precip":4.3,"et0":2.29,"irrigation_needed":0,"wind_avg":10.5,"disease_risk":"MEDIUM"},{"date":"2026-04-24","tmin":6.4,"tmax":17.7,"tavg":12.0,"hum_avg":62.2,"hum_hours_80":0,"precip":0.0,"et0":3.83,"irrigation_needed":4.4,"wind_avg":5.3,"disease_risk":"LOW"},{"date":"2026-04-25","tmin":8.5,"tmax":19.1,"tavg":13.8,"hum_avg":58.3,"hum_hours_80":0,"precip":0.0,"et0":4.11,"irrigation_needed":4.73,"wind_avg":6.8,"disease_risk":"LOW"},{"date":"2026-04-26","tmin":10.7,"tmax":22.7,"tavg":16.5,"hum_avg":56.7,"hum_hours_80":0,"precip":0.0,"et0":4.45,"irrigation_needed":5.12,"wind_avg":4.0,"disease_risk":"LOW"},{"date":"2026-04-27","tmin":9.8,"tmax":15.3,"tavg":13.0,"hum_avg":71.8,"hum_hours_80":4,"precip":0.0,"et0":3.49,"irrigation_needed":4.01,"wind_avg":16.4,"disease_risk":"MEDIUM"},{"date":"2026-04-28","tmin":6.6,"tmax":16.1,"tavg":11.6,"hum_avg":73.1,"hum_hours_80":10,"precip":0.0,"et0":3.68,"irrigation_needed":4.23,"wind_avg":8.9,"disease_risk":"HIGH"},{"date":"2026-04-29","tmin":7.1,"tmax":18.1,"tavg":12.5,"hum_avg":68.4,"hum_hours_80":0,"precip":0.0,"et0":3.89,"irrigation_needed":4.47,"wind_avg":6.5,"disease_risk":"LOW"},{"date":"2026-04-30","tmin":8.6,"tmax":16.6,"tavg":12.4,"hum_avg":78.2,"hum_hours_80":10,"precip":0.0,"et0":3.28,"irrigation_needed":3.77,"wind_avg":10.4,"disease_risk":"HIGH"},{"date":"2026-05-01","tmin":7.8,"tmax":11.0,"tavg":8.9,"hum_avg":93.5,"hum_hours_80":24,"precip":19.4,"et0":0.75,"irrigation_needed":0,"wind_avg":20.7,"disease_risk":"MEDIUM"},{"date":"2026-05-02","tmin":7.1,"tmax":11.1,"tavg":8.7,"hum_avg":76.5,"hum_hours_80":10,"precip":3.5,"et0":2.52,"irrigation_needed":0,"wind_avg":22.0,"disease_risk":"MEDIUM"},{"date":"2026-05-03","tmin":6.7,"tmax":9.4,"tavg":8.1,"hum_avg":89.5,"hum_hours_80":20,"precip":21.3,"et0":0.75,"irrigation_needed":0,"wind_avg":23.8,"disease_risk":"MEDIUM"},{"date":"2026-05-04","tmin":6.5,"tmax":15.2,"tavg":10.9,"hum_avg":64.9,"hum_hours_80":1,"precip":0.0,"et0":3.04,"irrigation_needed":3.5,"wind_avg":12.8,"disease_risk":"LOW"},{"date":"2026-05-05","tmin":7.4,"tmax":18.3,"tavg":13.2,"hum_avg":59.6,"hum_hours_80":0,"precip":0.0,"et0":4.39,"irrigation_needed":5.05,"wind_avg":6.5,"disease_risk":"LOW"},{"date":"2026-05-06","tmin":8.4,"tmax":21.8,"tavg":15.7,"hum_avg":65.2,"hum_hours_80":1,"precip":0.0,"et0":4.53,"irrigation_needed":5.21,"wind_avg":6.0,"disease_risk":"LOW"},{"date":"2026-05-07","tmin":12.8,"tmax":25.6,"tavg":18.7,"hum_avg":62.3,"hum_hours_80":1,"precip":0.0,"et0":4.87,"irrigation_needed":5.6,"wind_avg":7.6,"disease_risk":"LOW"},{"date":"2026-05-08","tmin":15.8,"tmax":23.8,"tavg":19.1,"hum_avg":59.1,"hum_hours_80":0,"precip":0.3,"et0":3.25,"irrigation_needed":3.44,"wind_avg":9.1,"disease_risk":"LOW"},{"date":"2026-05-09","tmin":13.8,"tmax":23.3,"tavg":18.5,"hum_avg":74.0,"hum_hours_80":9,"precip":5.4,"et0":3.78,"irrigation_needed":0,"wind_avg":9.7,"disease_risk":"HIGH"},{"date":"2026-05-10","tmin":13.5,"tmax":23.1,"tavg":18.7,"hum_avg":74.5,"hum_hours_80":5,"precip":3.0,"et0":4.22,"irrigation_needed":1.85,"wind_avg":4.8,"disease_risk":"MEDIUM"},{"date":"2026-05-11","tmin":14.5,"tmax":26.5,"tavg":20.1,"hum_avg":78.0,"hum_hours_80":16,"precip":0.5,"et0":4.61,"irrigation_needed":4.8,"wind_avg":3.9,"disease_risk":"HIGH"},{"date":"2026-05-12","tmin":16.3,"tmax":25.7,"tavg":21.1,"hum_avg":68.2,"hum_hours_80":9,"precip":0.0,"et0":5.36,"irrigation_needed":6.16,"wind_avg":13.2,"disease_risk":"HIGH"},{"date":"2026-05-13","tmin":15.6,"tmax":25.5,"tavg":20.2,"hum_avg":64.5,"hum_hours_80":5,"precip":0.0,"et0":5.39,"irrigation_needed":6.2,"wind_avg":14.4,"disease_risk":"MEDIUM"},{"date":"2026-05-14","tmin":9.0,"tmax":15.9,"tavg":13.0,"hum_avg":89.7,"hum_hours_80":22,"precip":6.6,"et0":1.09,"irrigation_needed":0,"wind_avg":6.7,"disease_risk":"HIGH"},{"date":"2026-05-15","tmin":6.0,"tmax":22.5,"tavg":14.6,"hum_avg":68.5,"hum_hours_80":9,"precip":0.0,"et0":4.53,"irrigation_needed":5.21,"wind_avg":4.9,"disease_risk":"HIGH"},{"date":"2026-05-16","tmin":11.6,"tmax":26.1,"tavg":18.8,"hum_avg":64.2,"hum_hours_80":7,"precip":0.4,"et0":4.6,"irrigation_needed":4.89,"wind_avg":5.8,"disease_risk":"HIGH"},{"date":"2026-05-17","tmin":15.4,"tmax":24.0,"tavg":20.0,"hum_avg":58.8,"hum_hours_80":2,"precip":0.5,"et0":5.55,"irrigation_needed":5.88,"wind_avg":16.9,"disease_risk":"LOW"},{"date":"2026-05-18","tmin":11.9,"tmax":21.4,"tavg":16.8,"hum_avg":64.3,"hum_hours_80":0,"precip":0.0,"et0":3.79,"irrigation_needed":4.36,"wind_avg":6.6,"disease_risk":"LOW"},{"date":"2026-05-19","tmin":11.7,"tmax":22.1,"tavg":17.1,"hum_avg":66.2,"hum_hours_80":9,"precip":0.2,"et0":4.14,"irrigation_needed":4.56,"wind_avg":4.8,"disease_risk":"HIGH"},{"date":"2026-05-20","tmin":11.4,"tmax":20.7,"tavg":15.7,"hum_avg":80.5,"hum_hours_80":16,"precip":2.7,"et0":2.62,"irrigation_needed":0.31,"wind_avg":4.7,"disease_risk":"HIGH"}];
+
+const labels = DATA.map(d => d.date.slice(5));
+const tickCfg = { autoSkip: true, maxTicksLimit: 10, font: { size: 11 }, color: '#999' };
+const gridCfg = { color: 'rgba(0,0,0,0.06)' };
+const baseOpts = (yLabel) => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, bodyFont: { size: 12 }, titleFont: { size: 12 } } },
+  scales: {
+    x: { ticks: tickCfg, grid: { display: false } },
+    y: { ticks: tickCfg, grid: gridCfg, title: yLabel ? { display: true, text: yLabel, font: { size: 11 }, color: '#aaa' } : { display: false } }
+  }
+});
+
+// 1. Sıcaklık
+new Chart(document.getElementById('c1'), {
+  type: 'line',
+  data: { labels, datasets: [
+    { label: 'Max', data: DATA.map(d=>d.tmax), borderColor:'#e05252', borderWidth:1.5, pointRadius:0, fill:false, tension:0.3 },
+    { label: 'Ortalama', data: DATA.map(d=>d.tavg), borderColor:'#1d9e75', borderWidth:2, pointRadius:0, fill:false, tension:0.3 },
+    { label: 'Min', data: DATA.map(d=>d.tmin), borderColor:'#378add', borderWidth:1.5, pointRadius:0, fill:false, tension:0.3 }
+  ]},
+  options: baseOpts('°C')
+});
+
+// 2. Yağış vs Sulama
+new Chart(document.getElementById('c2'), {
+  type: 'bar',
+  data: { labels, datasets: [
+    { label: 'Yağış', data: DATA.map(d=>d.precip), backgroundColor:'rgba(55,138,221,0.65)', borderRadius:2 },
+    { label: 'Sulama ihtiyacı', data: DATA.map(d=>d.irrigation_needed), backgroundColor:'rgba(29,158,117,0.65)', borderRadius:2 }
+  ]},
+  options: { ...baseOpts('mm'), scales: { ...baseOpts('mm').scales, x: { ...baseOpts().scales.x, stacked: false } } }
+});
+
+// 3. Nem
+new Chart(document.getElementById('c3'), {
+  type: 'line',
+  data: { labels, datasets: [
+    { label: 'Ortalama nem', data: DATA.map(d=>d.hum_avg), borderColor:'#7f77dd', backgroundColor:'rgba(127,119,221,0.09)', borderWidth:2, pointRadius:0, fill:true, tension:0.3 },
+    { label: '%80 eşiği', data: DATA.map(()=>80), borderColor:'#e05252', borderWidth:1.2, borderDash:[5,4], pointRadius:0, fill:false }
+  ]},
+  options: { ...baseOpts('%'), scales: { ...baseOpts('%').scales, y: { ...baseOpts('%').scales.y, min:40, max:100 } } }
+});
+
+// 4. Hastalık Riski
+const riskColor = r => r==='HIGH' ? 'rgba(224,82,82,0.75)' : r==='MEDIUM' ? 'rgba(239,159,39,0.7)' : 'rgba(99,153,34,0.65)';
+new Chart(document.getElementById('c4'), {
+  type: 'bar',
+  data: { labels, datasets: [{
+    label: 'Nem≥80% saati',
+    data: DATA.map(d=>d.hum_hours_80),
+    backgroundColor: DATA.map(d=>riskColor(d.disease_risk)),
+    borderRadius: 2
+  }]},
+  options: {
+    ...baseOpts('saat/gün'),
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => `${ctx.raw} saat ≥%80 nem · ${DATA[ctx.dataIndex].disease_risk}` } }
+    },
+    scales: { ...baseOpts('saat/gün').scales, y: { ...baseOpts('saat/gün').scales.y, max: 24 } }
+  }
+});
+
+// 5. ET0
+new Chart(document.getElementById('c5'), {
+  type: 'line',
+  data: { labels, datasets: [{
+    label: 'ET₀',
+    data: DATA.map(d=>d.et0),
+    borderColor:'#ef9f27', backgroundColor:'rgba(239,159,39,0.1)', borderWidth:2, pointRadius:0, fill:true, tension:0.3
+  }]},
+  options: baseOpts('mm/gün')
+});
+
+// 6. Rüzgar
+new Chart(document.getElementById('c6'), {
+  type: 'line',
+  data: { labels, datasets: [{
+    label: 'Rüzgar',
+    data: DATA.map(d=>d.wind_avg),
+    borderColor:'#888780', backgroundColor:'rgba(136,135,128,0.08)', borderWidth:1.5, pointRadius:0, fill:true, tension:0.3
+  }]},
+  options: baseOpts('km/sa')
+});
+</script>
+</body>
+</html>
