@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Biga Ovası — Tarla Yönetim Paneli</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0f1117;
+  --surface:#181c27;
+  --surface2:#1e2333;
+  --border:rgba(255,255,255,0.07);
+  --border2:rgba(255,255,255,0.12);
+  --text:#e8e6df;
+  --muted:#7a7f96;
+  --accent:#3d8ef0;
+
+  --irr-done:#1a5fa8;
+  --irr-done-bg:rgba(26,95,168,0.18);
+  --irr-active:#22c55e;
+  --irr-active-bg:rgba(34,197,94,0.18);
+  --irr-pending:#e05252;
+  --irr-pending-bg:rgba(224,82,82,0.15);
+  --irr-skip:#f59e0b;
+  --irr-skip-bg:rgba(245,158,11,0.15);
+
+  --fert:#a855f7;
+  --pest:#ef4444;
+  --water:#3b82f6;
+}
+
+body{
+  font-family:'Segoe UI',system-ui,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  display:grid;
+  grid-template-columns:260px 1fr 300px;
+  grid-template-rows:56px 1fr;
+  grid-template-areas:"nav nav nav" "sidebar main detail";
+  height:100vh;
+  overflow:hidden;
+}
+
+/* ── TOPNAV ── */
+nav{
+  grid-area:nav;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 1.2rem;
+  gap:12px;
+}
+
+.nav-left{display:flex;align-items:center;gap:12px}
+.nav-logo{
+  background:var(--accent);
+  color:#fff;
+  font-size:11px;
+  font-weight:700;
+  padding:4px 8px;
+  border-radius:6px;
+  letter-spacing:0.05em;
+}
+.nav-title{font-size:14px;font-weight:600}
+.nav-sub{font-size:11px;color:var(--muted);margin-top:1px}
+
+.nav-tabs{display:flex;gap:2px}
+.nav-tab{
+  padding:5px 14px;
+  border-radius:6px;
+  font-size:12px;
+  cursor:pointer;
+  color:var(--muted);
+  background:transparent;
+  border:none;
+  font-family:inherit;
+  transition:background 0.15s,color 0.15s;
+}
+.nav-tab.active{background:rgba(61,142,240,0.15);color:var(--accent);}
+.nav-tab:hover:not(.active){background:var(--surface2);color:var(--text);}
+
+.nav-right{display:flex;align-items:center;gap:10px;}
+.live-pill{
+  display:flex;align-items:center;gap:5px;
+  background:rgba(34,197,94,0.12);
+  border:1px solid rgba(34,197,94,0.25);
+  color:#22c55e;
+  font-size:11px;padding:4px 10px;border-radius:20px;
+}
+.live-dot{width:6px;height:6px;border-radius:50%;background:#22c55e;animation:blink 1.5s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.time-badge{font-size:12px;color:var(--muted)}
+
+/* ── SIDEBAR ── */
+aside{
+  grid-area:sidebar;
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  overflow-y:auto;
+  padding:1rem;
+}
+
+.sidebar-section{margin-bottom:1.2rem}
+.s-title{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px}
+
+/* Mode selector */
+.mode-btns{display:flex;flex-direction:column;gap:4px}
+.mode-btn{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 12px;border-radius:8px;
+  cursor:pointer;border:1px solid transparent;
+  background:transparent;font-family:inherit;
+  font-size:13px;color:var(--muted);
+  text-align:left;transition:all 0.15s;
+  width:100%;
+}
+.mode-btn:hover{background:var(--surface2);color:var(--text)}
+.mode-btn.active{background:var(--surface2);border-color:var(--border2);color:var(--text)}
+.mode-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+
+/* Stats summary */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.stat-box{background:var(--surface2);border-radius:8px;padding:8px 10px}
+.stat-box .sv{font-size:18px;font-weight:600;line-height:1}
+.stat-box .sl{font-size:10px;color:var(--muted);margin-top:3px}
+
+/* Schedule list */
+.sched-item{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 0;
+  border-bottom:1px solid var(--border);
+  font-size:12px;
+}
+.sched-item:last-child{border-bottom:none}
+.sched-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sched-time{color:var(--muted);font-size:11px;margin-left:auto}
+
+/* ── MAIN MAP ── */
+main{
+  grid-area:main;
+  overflow:hidden;
+  position:relative;
+  display:flex;
+  flex-direction:column;
+}
+
+.map-toolbar{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 14px;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+
+.mt-label{font-size:11px;color:var(--muted)}
+.legend-items{display:flex;gap:10px;align-items:center;margin-left:auto}
+.leg{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.leg-dot{width:10px;height:10px;border-radius:3px}
+
+.map-area{
+  flex:1;
+  overflow:hidden;
+  position:relative;
+  padding:16px;
+  background:linear-gradient(135deg,#0d1018 0%,#111521 100%);
+}
+
+/* Field grid */
+.field-grid{
+  display:grid;
+  width:100%;
+  height:100%;
+  gap:4px;
+}
+
+.parcel{
+  border-radius:6px;
+  border:1.5px solid rgba(255,255,255,0.06);
+  cursor:pointer;
+  position:relative;
+  transition:all 0.2s;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  padding:6px 7px;
+  min-height:0;
+}
+
+.parcel:hover{border-color:rgba(255,255,255,0.25);transform:scale(1.02);z-index:10}
+.parcel.selected{border-color:#fff;border-width:2px;z-index:10}
+
+/* Parcel states — Sulama */
+.p-done    {background:var(--irr-done-bg);border-color:rgba(26,95,168,0.4)}
+.p-active  {background:var(--irr-active-bg);border-color:rgba(34,197,94,0.5);animation:pulse-green 2s infinite}
+.p-pending {background:var(--irr-pending-bg);border-color:rgba(224,82,82,0.4)}
+.p-skip    {background:var(--irr-skip-bg);border-color:rgba(245,158,11,0.4)}
+.p-fert    {background:rgba(168,85,247,0.15);border-color:rgba(168,85,247,0.4)}
+.p-pest    {background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.4)}
+.p-ok      {background:rgba(34,197,94,0.08);border-color:rgba(34,197,94,0.25)}
+
+@keyframes pulse-green{
+  0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.3)}
+  50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}
+}
+
+.parcel-id{font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);letter-spacing:0.04em}
+.parcel-id.bright{color:rgba(255,255,255,0.9)}
+
+.parcel-status-icon{font-size:16px;text-align:center;flex:1;display:flex;align-items:center;justify-content:center}
+
+.parcel-val{font-size:9px;color:rgba(255,255,255,0.45)}
+
+/* Alert overlay */
+.p-alert::after{
+  content:'⚠';
+  position:absolute;top:4px;right:5px;
+  font-size:11px;
+}
+
+/* Water animation */
+.p-active .water-ripple{
+  position:absolute;bottom:0;left:0;right:0;
+  height:3px;
+  background:linear-gradient(90deg,transparent,rgba(34,197,94,0.6),transparent);
+  animation:water-flow 1.2s linear infinite;
+}
+@keyframes water-flow{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+
+/* ── DETAIL PANEL ── */
+.detail{
+  grid-area:detail;
+  background:var(--surface);
+  border-left:1px solid var(--border);
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+}
+
+.detail-header{
+  padding:14px 16px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.detail-header h3{font-size:15px;font-weight:600}
+.detail-header p{font-size:12px;color:var(--muted);margin-top:2px}
+
+.detail-body{padding:14px 16px;flex:1;overflow-y:auto}
+
+.d-section{margin-bottom:1.2rem}
+.d-s-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:8px}
+
+/* Sensor bars */
+.sensor-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.sensor-row .sr-label{font-size:11px;color:var(--muted);width:75px;flex-shrink:0}
+.bar-wrap{flex:1;height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width 0.5s}
+.sr-val{font-size:11px;font-weight:500;width:40px;text-align:right}
+
+/* Action buttons */
+.action-btns{display:flex;flex-direction:column;gap:6px}
+.act-btn{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px;border-radius:9px;
+  border:1px solid var(--border2);
+  background:var(--surface2);
+  cursor:pointer;font-family:inherit;font-size:13px;
+  color:var(--text);text-align:left;
+  transition:all 0.15s;width:100%;
+}
+.act-btn:hover{border-color:rgba(255,255,255,0.2);background:rgba(255,255,255,0.05)}
+.act-btn .act-icon{font-size:18px;width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.act-btn .act-label{font-size:13px;font-weight:500}
+.act-btn .act-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.act-btn.primary{background:rgba(61,142,240,0.15);border-color:rgba(61,142,240,0.4);color:#7ab8f7}
+
+/* History log */
+.log-item{
+  display:flex;gap:8px;padding:6px 0;
+  border-bottom:1px solid var(--border);
+  font-size:11px;
+}
+.log-item:last-child{border-bottom:none}
+.log-time{color:var(--muted);flex-shrink:0;width:45px}
+.log-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:3px}
+
+/* Operation badge */
+.op-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:2px 8px;border-radius:20px;font-size:10px;font-weight:500;
+}
+.op-water{background:rgba(59,130,246,0.2);color:#7ab8f7}
+.op-fert{background:rgba(168,85,247,0.2);color:#c084fc}
+.op-pest{background:rgba(239,68,68,0.2);color:#f87171}
+
+/* Progress ring */
+.progress-ring-wrap{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.ring-info .ri-val{font-size:22px;font-weight:700}
+.ring-info .ri-label{font-size:11px;color:var(--muted)}
+
+/* Tooltip */
+.tooltip-layer{
+  position:absolute;pointer-events:none;
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:8px;padding:8px 12px;font-size:12px;
+  z-index:100;display:none;min-width:140px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+
+/* Responsive */
+@media(max-width:1100px){
+  body{grid-template-columns:220px 1fr 260px}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-left">
+    <div>
+      <div class="nav-logo">APM G8</div>
+    </div>
+    <div>
+      <div class="nav-title">Tarla Yönetim Paneli</div>
+      <div class="nav-sub">Biga Ovası · 100 ha · 40 Parsel</div>
+    </div>
+    <div class="nav-tabs" style="margin-left:20px">
+      <button class="nav-tab active" onclick="setTab(this,'sulama')">💧 Sulama</button>
+      <button class="nav-tab" onclick="setTab(this,'gubreleme')">🌿 Gübreleme</button>
+      <button class="nav-tab" onclick="setTab(this,'ilacalama')">🧪 İlaçlama</button>
+      <button class="nav-tab" onclick="setTab(this,'genel')">📊 Genel</button>
+    </div>
+  </div>
+  <div class="nav-right">
+    <div class="live-pill"><span class="live-dot"></span>Canlı</div>
+    <div class="time-badge" id="clock">--:--</div>
+  </div>
+</nav>
+
+<!-- SIDEBAR -->
+<aside>
+
+  <!-- Mod Seçici -->
+  <div class="sidebar-section">
+    <div class="s-title">Harita Görünümü</div>
+    <div class="mode-btns">
+      <button class="mode-btn active" onclick="setMapMode(this,'moisture')">
+        <div class="mode-icon" style="background:rgba(59,130,246,0.15)">💧</div>
+        <div><div style="font-size:12px">Toprak Nemi</div><div style="font-size:10px;color:var(--muted)">Zone bazlı</div></div>
+      </button>
+      <button class="mode-btn" onclick="setMapMode(this,'operation')">
+        <div class="mode-icon" style="background:rgba(34,197,94,0.15)">⚙️</div>
+        <div><div style="font-size:12px">Operasyon Durumu</div><div style="font-size:10px;color:var(--muted)">Sulama / Gübre / İlaç</div></div>
+      </button>
+      <button class="mode-btn" onclick="setMapMode(this,'pest')">
+        <div class="mode-icon" style="background:rgba(239,68,68,0.12)">🐛</div>
+        <div><div style="font-size:12px">Haşere / Hastalık</div><div style="font-size:10px;color:var(--muted)">Risk haritası</div></div>
+      </button>
+      <button class="mode-btn" onclick="setMapMode(this,'ndvi')">
+        <div class="mode-icon" style="background:rgba(34,197,94,0.12)">🛰️</div>
+        <div><div style="font-size:12px">Bitki Sağlığı</div><div style="font-size:10px;color:var(--muted)">NDVI indeksi</div></div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Özet İstatistikler -->
+  <div class="sidebar-section">
+    <div class="s-title">Bugün Özeti</div>
+    <div class="stat-grid">
+      <div class="stat-box">
+        <div class="sv" style="color:#3b82f6" id="sb-irrigated">18</div>
+        <div class="sl">Sulanan parsel</div>
+      </div>
+      <div class="stat-box">
+        <div class="sv" style="color:#e05252" id="sb-pending">8</div>
+        <div class="sl">Bekleyen parsel</div>
+      </div>
+      <div class="stat-box">
+        <div class="sv" style="color:#22c55e" id="sb-water">4.2 m³</div>
+        <div class="sl">Su kullanımı</div>
+      </div>
+      <div class="stat-box">
+        <div class="sv" style="color:#a855f7" id="sb-fert">3</div>
+        <div class="sl">Gübre yapıldı</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Yaklaşan İşlemler -->
+  <div class="sidebar-section">
+    <div class="s-title">Yaklaşan İşlemler</div>
+    <div>
+      <div class="sched-item">
+        <div class="sched-dot" style="background:#3b82f6"></div>
+        <div>
+          <div style="font-size:12px">A3–A5 Sulama</div>
+          <div style="font-size:10px;color:var(--muted)">4.8 mm · Damla</div>
+        </div>
+        <div class="sched-time">09:30</div>
+      </div>
+      <div class="sched-item">
+        <div class="sched-dot" style="background:#a855f7"></div>
+        <div>
+          <div style="font-size:12px">B zonu Gübreleme</div>
+          <div style="font-size:10px;color:var(--muted)">N-P-K · Fertirigasyon</div>
+        </div>
+        <div class="sched-time">11:00</div>
+      </div>
+      <div class="sched-item">
+        <div class="sched-dot" style="background:#ef4444"></div>
+        <div>
+          <div style="font-size:12px">D2–D4 İlaçlama</div>
+          <div style="font-size:10px;color:var(--muted)">Mildiyö önleme</div>
+        </div>
+        <div class="sched-time">06:00</div>
+      </div>
+      <div class="sched-item">
+        <div class="sched-dot" style="background:#f59e0b"></div>
+        <div>
+          <div style="font-size:12px">C6 Yağış nedeni skip</div>
+          <div style="font-size:10px;color:var(--muted)">ETc < yağış</div>
+        </div>
+        <div class="sched-time">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Domates Üretim Takvimi -->
+  <div class="sidebar-section">
+    <div class="s-title">Üretim Takvimi</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Mevcut evre: <span style="color:#22c55e;font-weight:600">Meyve Tutumu</span></div>
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:11px">Fide dikimi</div>
+        <div style="font-size:10px;color:#22c55e">✓ Nis</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:11px">Çiçeklenme</div>
+        <div style="font-size:10px;color:#22c55e">✓ May</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:11px;color:#7ab8f7;font-weight:500">▶ Meyve tutumu</div>
+        <div style="font-size:10px;color:#7ab8f7">Haz</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:11px;color:var(--muted)">Meyve gelişimi</div>
+        <div style="font-size:10px;color:var(--muted)">Tem</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:11px;color:var(--muted)">Hasat</div>
+        <div style="font-size:10px;color:var(--muted)">Eyl</div>
+      </div>
+    </div>
+  </div>
+
+</aside>
+
+<!-- MAIN MAP -->
+<main>
+  <div class="map-toolbar">
+    <span class="mt-label" id="mapModeLabel">💧 Toprak Nemi Görünümü</span>
+    <div class="legend-items" id="legendItems">
+      <div class="leg"><div class="leg-dot" style="background:#1a5fa8"></div>Sulama yapıldı</div>
+      <div class="leg"><div class="leg-dot" style="background:#22c55e"></div>Sulanıyor</div>
+      <div class="leg"><div class="leg-dot" style="background:#e05252"></div>Bekliyor</div>
+      <div class="leg"><div class="leg-dot" style="background:#f59e0b"></div>Yağış - atlandı</div>
+    </div>
+    <button onclick="simulateNext()" style="margin-left:8px;background:rgba(61,142,240,0.15);border:1px solid rgba(61,142,240,0.3);color:#7ab8f7;padding:5px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit">▶ Simüle Et</button>
+  </div>
+
+  <div class="map-area" id="mapArea">
+    <div class="field-grid" id="fieldGrid" style="grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(5,1fr)">
+    </div>
+  </div>
+
+  <!-- Tooltip -->
+  <div class="tooltip-layer" id="tooltip"></div>
+</main>
+
+<!-- DETAIL PANEL -->
+<div class="detail" id="detailPanel">
+  <div class="detail-header">
+    <h3 id="d-title">Parsel Seç</h3>
+    <p id="d-sub">Haritadan bir parsel tıklayın</p>
+  </div>
+  <div class="detail-body">
+
+    <!-- Sensör verileri -->
+    <div class="d-section" id="d-sensors">
+      <div class="d-s-title">Sensör Verileri</div>
+      <div id="sensorBars"></div>
+    </div>
+
+    <!-- Hızlı aksiyonlar -->
+    <div class="d-section">
+      <div class="d-s-title">Hızlı Aksiyonlar</div>
+      <div class="action-btns" id="actionBtns">
+        <button class="act-btn primary" onclick="doAction('water')">
+          <div class="act-icon" style="background:rgba(59,130,246,0.2)">💧</div>
+          <div><div class="act-label">Sulamayı Başlat</div><div class="act-sub">Damla sulama · AI önerisi: 4.2 mm</div></div>
+        </button>
+        <button class="act-btn" onclick="doAction('fert')">
+          <div class="act-icon" style="background:rgba(168,85,247,0.15)">🌿</div>
+          <div><div class="act-label">Gübreleme Uygula</div><div class="act-sub">Fertirigasyon · N:P:K = 2:1:3</div></div>
+        </button>
+        <button class="act-btn" onclick="doAction('pest')">
+          <div class="act-icon" style="background:rgba(239,68,68,0.12)">🧪</div>
+          <div><div class="act-label">İlaçlama Başlat</div><div class="act-sub">Mildiyö önleme · Rüzgar uygun</div></div>
+        </button>
+        <button class="act-btn" onclick="doAction('skip')">
+          <div class="act-icon" style="background:rgba(245,158,11,0.1)">⏭</div>
+          <div><div class="act-label">Bu Parseli Atla</div><div class="act-sub">Yağış yeterli / manuel iptal</div></div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Gübreleme bilgisi -->
+    <div class="d-section">
+      <div class="d-s-title">Gübreleme Programı (Domates)</div>
+      <div style="display:flex;flex-direction:column;gap:5px;font-size:11px">
+        <div style="display:flex;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:6px">
+          <span style="color:var(--muted)">Fide dönemi</span><span>N-P-K 1:1:1 · her sulama</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:5px 8px;background:rgba(61,142,240,0.1);border-radius:6px;border:1px solid rgba(61,142,240,0.2)">
+          <span style="color:#7ab8f7">▶ Meyve tutumu</span><span>N-P-K 1:0.5:2 · haftada 2x</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:6px">
+          <span style="color:var(--muted)">Meyve gelişimi</span><span>K artır · haftada 3x</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:6px">
+          <span style="color:var(--muted)">Ca takviyesi</span><span>Haftada 1x · çiçek burnu</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- İlaçlama bilgisi -->
+    <div class="d-section">
+      <div class="d-s-title">İlaçlama Kriterleri</div>
+      <div style="display:flex;flex-direction:column;gap:5px;font-size:11px">
+        <div style="display:flex;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:6px">
+          <span style="color:var(--muted)">Mildiyö önleme</span><span>Nem >%80 + 6h → ilaçla</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:6px">
+          <span style="color:var(--muted)">Külleme</span><span>Kuru hava + yüksek T → izle</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:6px">
+          <span style="color:var(--muted)">Yaprak biti</span><span>Görsel kontrol · haftalık</span>
+        </div>
+        <div style="padding:5px 8px;background:rgba(245,158,11,0.08);border-radius:6px;border:1px solid rgba(245,158,11,0.2)">
+          <span style="color:#f59e0b">⚠ Rüzgar >20 km/sa ise ilaçlama YAPMA</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- İşlem geçmişi -->
+    <div class="d-section">
+      <div class="d-s-title">İşlem Geçmişi</div>
+      <div id="opLog">
+        <div class="log-item"><div class="log-time">08:14</div><div class="log-dot" style="background:#3b82f6"></div><div><span class="op-badge op-water">💧 Sulama</span><div style="font-size:10px;color:var(--muted);margin-top:2px">4.1 mm · 22 dk · A1-A2</div></div></div>
+        <div class="log-item"><div class="log-time">07:30</div><div class="log-dot" style="background:#a855f7"></div><div><span class="op-badge op-fert">🌿 Gübre</span><div style="font-size:10px;color:var(--muted);margin-top:2px">N-P-K · B1-B3</div></div></div>
+        <div class="log-item"><div class="log-time">Dün</div><div class="log-dot" style="background:#ef4444"></div><div><span class="op-badge op-pest">🧪 İlaç</span><div style="font-size:10px;color:var(--muted);margin-top:2px">Mildiyö · D2-D4</div></div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── MOCK DATA ───────────────────────────────────────────────────────
+const ZONES = ['A','B','C','D','E'];
+const COLS  = 8;
+const ROWS  = 5;
+
+// Statüler: sulama görünümü
+const IRRSTATES = ['done','done','done','active','active','pending','pending','pending',
+  'done','done','done','done','active','pending','pending','skip',
+  'done','done','done','done','done','done','pending','pending',
+  'skip','done','done','done','pending','pending','pending','pending',
+  'pending','pending','done','done','done','pending','done','done'];
+
+// Mock sensör verileri per parsel
+function mockSensors(id) {
+  const seed = id * 13 + 7;
+  const moisture = 30 + (seed * 17 % 55);
+  const temp = 18 + (seed * 7 % 12);
+  const ph = 5.8 + (seed * 3 % 20) / 10;
+  const n = 20 + seed % 60;
+  const pest = seed % 5 === 0 ? 'HIGH' : seed % 3 === 0 ? 'MEDIUM' : 'LOW';
+  const ndvi = 0.3 + (seed * 11 % 50) / 100;
+  return { moisture, temp, ph, n, pest, ndvi };
+}
+
+const MODE_LABELS = {
+  moisture:  '💧 Toprak Nemi Görünümü',
+  operation: '⚙️ Operasyon Durumu',
+  pest:      '🐛 Haşere / Hastalık Riski',
+  ndvi:      '🛰️ Bitki Sağlığı (NDVI)',
+};
+
+let currentMode = 'operation';
+let currentTab  = 'sulama';
+let selectedParcel = null;
+let animStep = 0;
+
+// ─── PARCEL BUILD ────────────────────────────────────────────────────
+function parcelClass(idx, mode) {
+  const s = mockSensors(idx);
+  if (mode === 'operation') {
+    const st = IRRSTATES[idx] || 'pending';
+    if (currentTab === 'gubreleme') {
+      return idx % 7 === 0 ? 'p-fert' : idx % 5 === 0 ? 'p-ok' : 'p-pending';
+    }
+    if (currentTab === 'ilacalama') {
+      return s.pest === 'HIGH' ? 'p-pest' : s.pest === 'MEDIUM' ? 'p-fert' : 'p-ok';
+    }
+    return `p-${st}`;
+  }
+  if (mode === 'moisture') {
+    if (s.moisture < 40) return 'p-pending';
+    if (s.moisture > 75) return 'p-skip';
+    return 'p-done';
+  }
+  if (mode === 'pest') {
+    return s.pest === 'HIGH' ? 'p-pest' : s.pest === 'MEDIUM' ? 'p-fert' : 'p-ok';
+  }
+  if (mode === 'ndvi') {
+    if (s.ndvi < 0.4) return 'p-pending';
+    if (s.ndvi < 0.6) return 'p-skip';
+    return 'p-done';
+  }
+  return 'p-pending';
+}
+
+function parcelIcon(idx, mode) {
+  const s = mockSensors(idx);
+  if (mode === 'moisture') {
+    if (s.moisture < 40) return '🏜';
+    if (s.moisture > 75) return '🌊';
+    return '✓';
+  }
+  if (mode === 'pest') {
+    return s.pest === 'HIGH' ? '🐛' : s.pest === 'MEDIUM' ? '⚠' : '✓';
+  }
+  if (mode === 'ndvi') {
+    if (s.ndvi < 0.4) return '🟡';
+    if (s.ndvi < 0.6) return '🟢';
+    return '💚';
+  }
+  // operation
+  if (currentTab === 'gubreleme') {
+    return idx % 7 === 0 ? '🌿' : idx % 5 === 0 ? '✓' : '○';
+  }
+  if (currentTab === 'ilacalama') {
+    return s.pest === 'HIGH' ? '🐛' : '✓';
+  }
+  const st = IRRSTATES[idx] || 'pending';
+  return st === 'done' ? '✓' : st === 'active' ? '💧' : st === 'skip' ? '⏭' : '○';
+}
+
+function buildGrid() {
+  const grid = document.getElementById('fieldGrid');
+  grid.innerHTML = '';
+  for (let i = 0; i < 40; i++) {
+    const row = Math.floor(i / COLS);
+    const col = i % COLS;
+    const zoneRow = ZONES[row];
+    const id = `${zoneRow}${col + 1}`;
+    const cls = parcelClass(i, currentMode);
+    const icon = parcelIcon(i, currentMode);
+    const s = mockSensors(i);
+    const isActive = IRRSTATES[i] === 'active';
+    const hasAlert = s.pest === 'HIGH' ? 'p-alert' : '';
+
+    const div = document.createElement('div');
+    div.className = `parcel ${cls} ${hasAlert} ${selectedParcel === i ? 'selected' : ''}`;
+    div.dataset.idx = i;
+    div.dataset.id = id;
+    div.innerHTML = `
+      <div class="parcel-id ${cls !== 'p-pending' ? 'bright' : ''}">${id}</div>
+      <div class="parcel-status-icon">${icon}</div>
+      <div class="parcel-val">${s.moisture.toFixed(0)}% nem</div>
+      ${isActive ? '<div class="water-ripple"></div>' : ''}
+    `;
+    div.addEventListener('click', () => selectParcel(i, id));
+    div.addEventListener('mouseenter', (e) => showTooltip(e, i, id, s));
+    div.addEventListener('mouseleave', () => hideTooltip());
+    grid.appendChild(div);
+  }
+}
+
+// ─── PARCEL SELECT ───────────────────────────────────────────────────
+function selectParcel(idx, id) {
+  selectedParcel = idx;
+  const s = mockSensors(idx);
+  const st = IRRSTATES[idx] || 'pending';
+  const stLabel = {done:'Sulama tamamlandı',active:'Sulanıyor ⚡',pending:'Bekliyor',skip:'Atlandı (yağış)'}[st] || '—';
+
+  document.getElementById('d-title').textContent = `Parsel ${id}`;
+  document.getElementById('d-sub').textContent = `${stLabel} · ${s.moisture.toFixed(0)}% toprak nemi`;
+
+  // Sensor bars
+  const bars = [
+    {label:'Toprak nemi', val:s.moisture, max:100, unit:'%', color: s.moisture<40?'#e05252':s.moisture>75?'#3b82f6':'#22c55e'},
+    {label:'Sıcaklık', val:s.temp, max:40, unit:'°C', color:'#f59e0b'},
+    {label:'pH', val:(s.ph-5)*100/3, max:100, unit:s.ph.toFixed(1), color:'#a855f7'},
+    {label:'Azot (N)', val:s.n, max:100, unit:'ppm', color:'#22c55e'},
+    {label:'NDVI', val:s.ndvi*100, max:100, unit:s.ndvi.toFixed(2), color:'#3b82f6'},
+  ];
+  document.getElementById('sensorBars').innerHTML = bars.map(b => `
+    <div class="sensor-row">
+      <div class="sr-label">${b.label}</div>
+      <div class="bar-wrap"><div class="bar-fill" style="width:${Math.min(100,b.val).toFixed(0)}%;background:${b.color}"></div></div>
+      <div class="sr-val" style="color:${b.color}">${b.unit}</div>
+    </div>`).join('');
+
+  // Log
+  const logs = [
+    {time:'08:14', type:'water', label:'💧 Sulama', detail:`${(s.moisture/10).toFixed(1)} mm · ${Math.round(s.moisture/2)} dk`},
+    {time:'07:30', type:'fert',  label:'🌿 Gübre',  detail:`N-P-K 1:0.5:2`},
+    {time:'Dün',   type:'pest',  label:'🧪 İlaç',   detail:`Mildiyö önleme`},
+  ];
+  document.getElementById('opLog').innerHTML = logs.map(l => `
+    <div class="log-item">
+      <div class="log-time">${l.time}</div>
+      <div class="log-dot" style="background:${l.type==='water'?'#3b82f6':l.type==='fert'?'#a855f7':'#ef4444'}"></div>
+      <div><span class="op-badge op-${l.type}">${l.label}</span>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px">${l.detail} · Parsel ${id}</div></div>
+    </div>`).join('');
+
+  buildGrid();
+}
+
+// ─── TOOLTIP ─────────────────────────────────────────────────────────
+function showTooltip(e, idx, id, s) {
+  const tt = document.getElementById('tooltip');
+  const st = IRRSTATES[idx] || 'pending';
+  const stTR = {done:'✓ Tamamlandı',active:'💧 Sulanıyor',pending:'○ Bekliyor',skip:'⏭ Atlandı'}[st];
+  tt.innerHTML = `<div style="font-weight:600;margin-bottom:5px">Parsel ${id}</div>
+    <div style="color:var(--muted);font-size:11px">Nem: <b style="color:white">${s.moisture.toFixed(0)}%</b></div>
+    <div style="color:var(--muted);font-size:11px">Sıcaklık: <b style="color:white">${s.temp.toFixed(1)}°C</b></div>
+    <div style="color:var(--muted);font-size:11px">Durum: <b style="color:white">${stTR}</b></div>`;
+  const rect = e.target.getBoundingClientRect();
+  const mapRect = document.getElementById('mapArea').getBoundingClientRect();
+  tt.style.left = (rect.left - mapRect.left + 10) + 'px';
+  tt.style.top  = (rect.top  - mapRect.top  - 80) + 'px';
+  tt.style.display = 'block';
+}
+function hideTooltip() {
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+// ─── ACTIONS ─────────────────────────────────────────────────────────
+function doAction(type) {
+  if (selectedParcel === null) return;
+  const id = document.getElementById('fieldGrid').children[selectedParcel]?.dataset.id;
+  const msgs = {
+    water: `✅ Sulama başlatıldı — Parsel ${id} · Damla sulama aktif`,
+    fert:  `✅ Gübreleme başlatıldı — Parsel ${id} · Fertirigasyon aktif`,
+    pest:  `✅ İlaçlama başlatıldı — Parsel ${id} · Mildiyö ilaçlama`,
+    skip:  `⏭ Parsel ${id} atlandı — Yağış yeterli`,
+  };
+
+  if (type === 'water') {
+    IRRSTATES[selectedParcel] = 'active';
+    setTimeout(() => { IRRSTATES[selectedParcel] = 'done'; buildGrid(); }, 3000);
+  } else if (type === 'skip') {
+    IRRSTATES[selectedParcel] = 'skip';
+  }
+
+  // Toast notification
+  showToast(msgs[type], type);
+  buildGrid();
+}
+
+function showToast(msg, type) {
+  const colors = {water:'#3b82f6', fert:'#a855f7', pest:'#ef4444', skip:'#f59e0b'};
+  const toast = document.createElement('div');
+  toast.style.cssText = `position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--surface);border:1px solid ${colors[type]||'#3b82f6'};
+    color:var(--text);padding:10px 20px;border-radius:10px;font-size:13px;
+    z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.4);transition:opacity 0.3s`;
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2500);
+}
+
+// ─── SIMULATE ────────────────────────────────────────────────────────
+function simulateNext() {
+  const pending = IRRSTATES.findIndex(s => s === 'pending');
+  if (pending >= 0) {
+    IRRSTATES[pending] = 'active';
+    setTimeout(() => { IRRSTATES[pending] = 'done'; buildGrid(); updateStats(); }, 2000);
+  }
+  buildGrid();
+  updateStats();
+}
+
+function updateStats() {
+  document.getElementById('sb-irrigated').textContent = IRRSTATES.filter(s=>s==='done').length;
+  document.getElementById('sb-pending').textContent   = IRRSTATES.filter(s=>s==='pending').length;
+}
+
+// ─── TABS ────────────────────────────────────────────────────────────
+function setTab(el, tab) {
+  document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  currentTab = tab;
+
+  // Legend güncelle
+  const legends = {
+    sulama: `<div class="leg"><div class="leg-dot" style="background:#1a5fa8"></div>Sulama yapıldı</div>
+             <div class="leg"><div class="leg-dot" style="background:#22c55e"></div>Sulanıyor</div>
+             <div class="leg"><div class="leg-dot" style="background:#e05252"></div>Bekliyor</div>
+             <div class="leg"><div class="leg-dot" style="background:#f59e0b"></div>Yağış — atlandı</div>`,
+    gubreleme: `<div class="leg"><div class="leg-dot" style="background:#a855f7"></div>Gübre uygulandı</div>
+                <div class="leg"><div class="leg-dot" style="background:#22c55e"></div>Tamamlandı</div>
+                <div class="leg"><div class="leg-dot" style="background:#e05252"></div>Bekliyor</div>`,
+    ilacalama: `<div class="leg"><div class="leg-dot" style="background:#ef4444"></div>Yüksek risk</div>
+                <div class="leg"><div class="leg-dot" style="background:#a855f7"></div>Orta risk</div>
+                <div class="leg"><div class="leg-dot" style="background:#22c55e"></div>Düşük risk</div>`,
+    genel: `<div class="leg"><div class="leg-dot" style="background:#3b82f6"></div>Normal</div>
+            <div class="leg"><div class="leg-dot" style="background:#f59e0b"></div>Dikkat</div>
+            <div class="leg"><div class="leg-dot" style="background:#e05252"></div>Kritik</div>`,
+  };
+  document.getElementById('legendItems').innerHTML = legends[tab] || legends.sulama;
+  buildGrid();
+}
+
+// ─── MAP MODE ────────────────────────────────────────────────────────
+function setMapMode(el, mode) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  currentMode = mode;
+  document.getElementById('mapModeLabel').textContent = MODE_LABELS[mode];
+  buildGrid();
+}
+
+// ─── CLOCK ───────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ─── INIT ─────────────────────────────────────────────────────────────
+buildGrid();
+updateStats();
+
+// Auto simulate for demo
+let demoTimer = setInterval(() => {
+  const idx = IRRSTATES.findIndex(s => s === 'active');
+  if (idx >= 0) { IRRSTATES[idx] = 'done'; buildGrid(); updateStats(); }
+  const next = IRRSTATES.findIndex(s => s === 'pending');
+  if (next >= 0) {
+    IRRSTATES[next] = 'active';
+    buildGrid();
+    updateStats();
+  }
+}, 4000);
+</script>
+</body>
+</html>
