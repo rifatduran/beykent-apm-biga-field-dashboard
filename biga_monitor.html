@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Biga Ovası — Anlık Çiftçi Monitörü</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f4f3ef;
+  --surface: #ffffff;
+  --border: rgba(0,0,0,0.09);
+  --text: #1a1a18;
+  --muted: #888884;
+  --green: #1a7a52;
+  --green-bg: #eaf3de;
+  --amber: #9a6200;
+  --amber-bg: #faeeda;
+  --red: #b83232;
+  --red-bg: #fcebeb;
+  --blue: #1a5fa8;
+  --blue-bg: #e6f1fb;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  padding: 1.5rem;
+  min-height: 100vh;
+}
+
+/* TOP BAR */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.topbar-left h1 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.topbar-left p {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.live-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--green-bg);
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(26,122,82,0.2);
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--green);
+  border-radius: 50%;
+  animation: pulse 1.8s infinite;
+}
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.update-btn {
+  background: var(--text);
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.update-btn:hover { opacity: 0.85; }
+
+.last-update {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ALERT BAR */
+.alert-bar {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  background: var(--red-bg);
+  border: 1px solid rgba(184,50,50,0.2);
+  border-radius: 10px;
+  padding: 10px 16px;
+  margin-bottom: 1.2rem;
+  font-size: 13px;
+  color: var(--red);
+}
+
+.alert-bar.show { display: flex; }
+
+/* GRID LAYOUTS */
+.row { display: grid; gap: 12px; margin-bottom: 12px; }
+.row-5 { grid-template-columns: repeat(5, 1fr); }
+.row-3 { grid-template-columns: 2fr 1fr 1fr; }
+.row-2 { grid-template-columns: 1fr 1fr; }
+.row-4 { grid-template-columns: repeat(4, 1fr); }
+
+@media (max-width: 900px) {
+  .row-5, .row-3, .row-4 { grid-template-columns: repeat(2, 1fr); }
+  .row-2 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 500px) {
+  .row-5, .row-3, .row-4, .row-2 { grid-template-columns: 1fr; }
+}
+
+/* CARDS */
+.card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 12px;
+  padding: 1.1rem 1.2rem;
+}
+
+.card-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 8px;
+}
+
+/* KPI CARDS */
+.kpi-value {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.kpi-unit {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.kpi-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.kpi-icon {
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+
+/* RISK PILL */
+.risk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.risk-HIGH { background: var(--red-bg); color: var(--red); }
+.risk-MEDIUM { background: var(--amber-bg); color: var(--amber); }
+.risk-LOW { background: var(--green-bg); color: var(--green); }
+
+/* WIND COMPASS */
+.compass-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.compass {
+  width: 90px;
+  height: 90px;
+  position: relative;
+}
+
+.compass svg { width: 100%; height: 100%; }
+
+/* FORECAST ROW */
+.forecast-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.fc-day {
+  text-align: center;
+  padding: 8px 4px;
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.fc-day .fc-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+.fc-day .fc-icon { font-size: 18px; margin-bottom: 4px; }
+.fc-day .fc-hi { font-size: 13px; font-weight: 600; }
+.fc-day .fc-lo { font-size: 11px; color: var(--muted); }
+.fc-day .fc-rain { font-size: 10px; color: var(--blue); margin-top: 2px; }
+
+/* CHART */
+.chart-wrap {
+  position: relative;
+  width: 100%;
+  height: 160px;
+  margin-top: 8px;
+}
+
+/* IRRIGATION DECISION */
+.decision-box {
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 6px;
+}
+
+.decision-box.irr-needed { background: var(--blue-bg); border: 1px solid rgba(26,95,168,0.15); }
+.decision-box.no-irr { background: var(--green-bg); border: 1px solid rgba(26,122,82,0.15); }
+.decision-box .d-label { font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+.decision-box .d-value { font-size: 16px; font-weight: 600; }
+.decision-box.irr-needed .d-value { color: var(--blue); }
+.decision-box.no-irr .d-value { color: var(--green); }
+
+/* API SOURCE TAGS */
+.api-tag {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 0.5px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-top: 6px;
+}
+
+/* SECTION LABEL */
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 1.2rem 0 0.5rem;
+}
+
+/* LOADING */
+.loading { color: var(--muted); font-size: 13px; }
+
+/* SOIL BARS */
+.soil-item { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.soil-item .s-label { font-size: 12px; color: var(--muted); width: 90px; flex-shrink: 0; }
+.soil-bar-wrap { flex: 1; background: var(--bg); border-radius: 4px; height: 6px; overflow: hidden; }
+.soil-bar { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+.soil-item .s-val { font-size: 12px; font-weight: 500; width: 44px; text-align: right; flex-shrink: 0; }
+
+footer {
+  margin-top: 1.5rem;
+  font-size: 11px;
+  color: #bbb;
+  text-align: center;
+  line-height: 1.6;
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <h1>Biga Ovası — Anlık Çiftçi Monitörü</h1>
+    <p>Domates tarlası · 40.17°N 27.22°E · Çanakkale, Türkiye</p>
+  </div>
+  <div class="topbar-right">
+    <span class="live-badge"><span class="live-dot"></span>Canlı</span>
+    <button class="update-btn" onclick="fetchAll()">Yenile</button>
+    <span class="last-update" id="lastUpdate">—</span>
+  </div>
+</div>
+
+<!-- ALERT BAR -->
+<div class="alert-bar" id="alertBar">
+  ⚠️ <span id="alertText"></span>
+</div>
+
+<!-- ROW 1: ANA KPI'LAR -->
+<div class="row row-5">
+  <div class="card">
+    <div class="card-title">Sıcaklık</div>
+    <div class="kpi-value" id="temp">—<span class="kpi-unit">°C</span></div>
+    <div class="kpi-sub" id="tempFeels">—</div>
+    <div class="api-tag">Open-Meteo Current</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Bağıl Nem</div>
+    <div class="kpi-value" id="hum">—<span class="kpi-unit">%</span></div>
+    <div class="kpi-sub" id="humStatus">—</div>
+    <div class="api-tag">Open-Meteo Current</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Yağış (Bugün)</div>
+    <div class="kpi-value" id="precip">—<span class="kpi-unit">mm</span></div>
+    <div class="kpi-sub" id="precipSub">—</div>
+    <div class="api-tag">Open-Meteo Current</div>
+  </div>
+  <div class="card">
+    <div class="card-title">UV İndeksi</div>
+    <div class="kpi-value" id="uv">—</div>
+    <div class="kpi-sub" id="uvStatus">—</div>
+    <div class="api-tag">Open-Meteo Air Quality</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Bulutluluk</div>
+    <div class="kpi-value" id="cloud">—<span class="kpi-unit">%</span></div>
+    <div class="kpi-sub" id="cloudSub">—</div>
+    <div class="api-tag">Open-Meteo Current</div>
+  </div>
+</div>
+
+<!-- ROW 2: RÜZGAR + SULAMA + MİLDİYÖ RİSKİ -->
+<div class="row row-3">
+
+  <!-- Rüzgar Pusulası -->
+  <div class="card">
+    <div class="card-title">Rüzgar</div>
+    <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+      <div class="compass-wrap">
+        <div class="compass">
+          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="46" fill="none" stroke="#e8e7e2" stroke-width="1.5"/>
+            <text x="50" y="14" text-anchor="middle" font-size="10" fill="#aaa" font-family="sans-serif">K</text>
+            <text x="86" y="54" text-anchor="middle" font-size="10" fill="#aaa" font-family="sans-serif">D</text>
+            <text x="50" y="93" text-anchor="middle" font-size="10" fill="#aaa" font-family="sans-serif">G</text>
+            <text x="14" y="54" text-anchor="middle" font-size="10" fill="#aaa" font-family="sans-serif">B</text>
+            <g id="windArrow" transform-origin="50 50" transform="rotate(0, 50, 50)">
+              <polygon points="50,12 45,50 50,46 55,50" fill="#1a1a18"/>
+              <polygon points="50,88 45,50 50,54 55,50" fill="#d0cfc8"/>
+            </g>
+          </svg>
+        </div>
+        <div style="font-size:11px; color:var(--muted);" id="windDir">—</div>
+      </div>
+      <div>
+        <div style="font-size:13px; color:var(--muted); margin-bottom:4px;">Hız</div>
+        <div style="font-size:26px; font-weight:600;" id="windSpeed">—<span style="font-size:14px; font-weight:400; color:var(--muted);"> km/sa</span></div>
+        <div style="font-size:12px; color:var(--muted); margin-top:4px;">Ani: <span id="windGust">—</span> km/sa</div>
+        <div style="font-size:12px; color:var(--muted); margin-top:2px;" id="windRisk">—</div>
+        <div class="api-tag">Open-Meteo Current</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sulama Kararı -->
+  <div class="card">
+    <div class="card-title">Sulama Kararı</div>
+    <div class="decision-box" id="irrigationBox">
+      <div class="d-label">Bugünkü ihtiyaç</div>
+      <div class="d-value" id="irrigationVal">Hesaplanıyor...</div>
+    </div>
+    <div style="margin-top:10px;">
+      <div style="font-size:12px; color:var(--muted);">ET₀ (bugün)</div>
+      <div style="font-size:16px; font-weight:600; margin-top:2px;" id="et0Val">— mm</div>
+    </div>
+    <div class="api-tag">FAO-56 · Open-Meteo</div>
+  </div>
+
+  <!-- Mildiyö Riski -->
+  <div class="card">
+    <div class="card-title">Mildiyö Riski</div>
+    <div id="diseaseRisk" style="margin-bottom:8px;">—</div>
+    <div style="font-size:12px; color:var(--muted); line-height:1.5;" id="diseaseDetail">—</div>
+    <div style="margin-top:10px;">
+      <div style="font-size:12px; color:var(--muted);">Çiğ noktası</div>
+      <div style="font-size:16px; font-weight:600; margin-top:2px;" id="dewPoint">— °C</div>
+    </div>
+    <div class="api-tag">Tom-Cast · Open-Meteo</div>
+  </div>
+
+</div>
+
+<!-- ROW 3: 24 SAATLİK SICAKLIK + NEM -->
+<p class="section-label">24 saatlik tahmin</p>
+<div class="row row-2">
+  <div class="card">
+    <div class="card-title">Sıcaklık — önümüzdeki 24 saat</div>
+    <div class="chart-wrap">
+      <canvas id="chartTemp" role="img" aria-label="Önümüzdeki 24 saatlik sıcaklık tahmini">Sıcaklık tahmini yükleniyor.</canvas>
+    </div>
+    <div class="api-tag">Open-Meteo Forecast</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Yağış ihtimali — önümüzdeki 24 saat</div>
+    <div class="chart-wrap">
+      <canvas id="chartRain" role="img" aria-label="Önümüzdeki 24 saatlik yağış ihtimali">Yağış tahmini yükleniyor.</canvas>
+    </div>
+    <div class="api-tag">Open-Meteo Forecast</div>
+  </div>
+</div>
+
+<!-- ROW 4: 7 GÜNLÜK TAHMİN -->
+<p class="section-label">7 günlük tahmin</p>
+<div class="card" style="margin-bottom:12px;">
+  <div class="forecast-row" id="forecastRow">
+    <div class="loading">Tahmin yükleniyor...</div>
+  </div>
+</div>
+
+<!-- ROW 5: TOPRAK + GÜNEŞ ENERJİSİ -->
+<p class="section-label">Toprak & radyasyon</p>
+<div class="row row-2">
+  <div class="card">
+    <div class="card-title">Toprak nemi tahmini (model)</div>
+    <div id="soilBars" style="margin-top:4px;">
+      <div class="loading">Yükleniyor...</div>
+    </div>
+    <div class="api-tag">Open-Meteo Soil · ERA5-Land</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Güneş radyasyonu</div>
+    <div class="chart-wrap" style="height:140px;">
+      <canvas id="chartSolar" role="img" aria-label="Güneş radyasyonu">Radyasyon verisi yükleniyor.</canvas>
+    </div>
+    <div style="display:flex; justify-content:space-between; margin-top:8px;">
+      <div>
+        <div style="font-size:11px; color:var(--muted);">Şu an</div>
+        <div style="font-size:16px; font-weight:600;" id="solarNow">— W/m²</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted);">Günlük pik</div>
+        <div style="font-size:16px; font-weight:600;" id="solarPeak">— W/m²</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted);">Gün doğumu</div>
+        <div style="font-size:16px; font-weight:600;" id="sunrise">—</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted);">Gün batımı</div>
+        <div style="font-size:16px; font-weight:600;" id="sunset">—</div>
+      </div>
+    </div>
+    <div class="api-tag">Open-Meteo Radiation</div>
+  </div>
+</div>
+
+<!-- ROW 6: HAVA KALİTESİ -->
+<p class="section-label">Hava kalitesi</p>
+<div class="row row-4">
+  <div class="card">
+    <div class="card-title">PM10</div>
+    <div class="kpi-value" id="pm10">—<span class="kpi-unit"> µg/m³</span></div>
+    <div class="kpi-sub" id="pm10s">—</div>
+    <div class="api-tag">Open-Meteo Air Quality</div>
+  </div>
+  <div class="card">
+    <div class="card-title">PM2.5</div>
+    <div class="kpi-value" id="pm25">—<span class="kpi-unit"> µg/m³</span></div>
+    <div class="kpi-sub" id="pm25s">—</div>
+    <div class="api-tag">Open-Meteo Air Quality</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Ozon (O₃)</div>
+    <div class="kpi-value" id="o3">—<span class="kpi-unit"> µg/m³</span></div>
+    <div class="kpi-sub" id="o3s">—</div>
+    <div class="api-tag">Open-Meteo Air Quality</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Avrupa AQI</div>
+    <div class="kpi-value" id="aqi">—</div>
+    <div class="kpi-sub" id="aqis">—</div>
+    <div class="api-tag">Open-Meteo Air Quality</div>
+  </div>
+</div>
+
+<footer>
+  Veri kaynakları: <strong>Open-Meteo Forecast API</strong> (hava, rüzgar, radyasyon, toprak nemi) · <strong>Open-Meteo Air Quality API</strong> (UV, PM, AQI) · Tüm API'lar ücretsiz, API key gerektirmez.<br>
+  Koordinat: Biga Ovası 40.17°N, 27.22°E · Kc=1.15 (domates meyve) · Hastalık riski: Tom-Cast algoritması · APM Grup 8 — İstanbul Beykent Üniversitesi 2026
+</footer>
+
+<script>
+const LAT = 40.17;
+const LON = 27.22;
+const TZ = 'Europe/Istanbul';
+
+let chartTemp = null, chartRain = null, chartSolar = null;
+
+const $ = id => document.getElementById(id);
+
+function wmoIcon(code, isDay) {
+  if (code === 0) return isDay ? '☀️' : '🌙';
+  if (code <= 2) return isDay ? '⛅' : '🌙';
+  if (code <= 3) return '☁️';
+  if (code <= 49) return '🌫️';
+  if (code <= 67) return '🌧️';
+  if (code <= 77) return '❄️';
+  if (code <= 82) return '🌦️';
+  if (code <= 86) return '🌨️';
+  if (code >= 95) return '⛈️';
+  return '🌡️';
+}
+
+function windDirLabel(deg) {
+  const dirs = ['K','KKD','KD','DKD','D','DGD','GD','GGD','G','GGB','GB','BGB','B','KBB','KB','KKB'];
+  return dirs[Math.round(deg / 22.5) % 16];
+}
+
+function diseaseRiskCalc(hum, temp, dewpoint) {
+  const spread = temp - dewpoint;
+  if (hum >= 85 && temp >= 10 && temp <= 24) return 'HIGH';
+  if (hum >= 75 && temp >= 10 && temp <= 26 && spread < 5) return 'MEDIUM';
+  return 'LOW';
+}
+
+function uvLabel(uv) {
+  if (uv <= 2) return 'Düşük';
+  if (uv <= 5) return 'Orta';
+  if (uv <= 7) return 'Yüksek';
+  if (uv <= 10) return 'Çok yüksek';
+  return 'Aşırı';
+}
+
+function aqiLabel(aqi) {
+  if (aqi <= 20) return 'İyi';
+  if (aqi <= 40) return 'İyi';
+  if (aqi <= 60) return 'Orta';
+  if (aqi <= 80) return 'Kötü';
+  if (aqi <= 100) return 'Çok kötü';
+  return 'Tehlikeli';
+}
+
+function pmLabel(pm, limits) {
+  if (pm <= limits[0]) return 'İyi';
+  if (pm <= limits[1]) return 'Orta';
+  return 'Kötü';
+}
+
+function makeChart(id, type, labels, datasets, opts) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return null;
+  const base = {
+    type, data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+      scales: {
+        x: { ticks: { font:{size:10}, color:'#aaa', maxTicksLimit: 8 }, grid: { display: false } },
+        y: { ticks: { font:{size:10}, color:'#aaa' }, grid: { color:'rgba(0,0,0,0.05)' }, ...opts }
+      }
+    }
+  };
+  return new Chart(ctx, base);
+}
+
+async function fetchAll() {
+  $('lastUpdate').textContent = 'Güncelleniyor...';
+
+  try {
+    const [weatherRes, airRes] = await Promise.all([
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m,dew_point_2m,et0_fao_evapotranspiration,shortwave_radiation,is_day&hourly=temperature_2m,precipitation_probability,shortwave_radiation,soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_moisture_3_to_9cm&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code,sunrise,sunset,et0_fao_evapotranspiration&timezone=${TZ}&forecast_days=7&wind_speed_unit=kmh`),
+      fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${LAT}&longitude=${LON}&current=pm10,pm2_5,ozone,european_aqi,uv_index&timezone=${TZ}`)
+    ]);
+
+    const weather = await weatherRes.json();
+    const air = await airRes.json();
+
+    const c = weather.current;
+    const h = weather.hourly;
+    const d = weather.daily;
+    const a = air.current;
+
+    const now = new Date();
+    const nowHour = now.getHours();
+
+    // -- SICAKLIK --
+    $('temp').innerHTML = `${Math.round(c.temperature_2m)}<span class="kpi-unit">°C</span>`;
+    $('tempFeels').textContent = `Hissedilen: ${Math.round(c.apparent_temperature)}°C`;
+
+    // -- NEM --
+    const hum = c.relative_humidity_2m;
+    $('hum').innerHTML = `${hum}<span class="kpi-unit">%</span>`;
+    $('humStatus').textContent = hum >= 80 ? '⚠️ Yüksek — fungal risk' : hum >= 60 ? 'Normal aralık' : 'Düşük';
+
+    // -- YAĞIŞ --
+    const precip = c.precipitation;
+    $('precip').innerHTML = `${precip.toFixed(1)}<span class="kpi-unit">mm</span>`;
+    $('precipSub').textContent = precip > 5 ? '🌧️ Sulama iptali önerilir' : precip > 0 ? 'Hafif yağış var' : 'Kuru';
+
+    // -- UV --
+    const uv = a.uv_index ?? 0;
+    $('uv').textContent = uv.toFixed(1);
+    $('uvStatus').textContent = uvLabel(uv);
+
+    // -- BULUT --
+    $('cloud').innerHTML = `${c.cloud_cover}<span class="kpi-unit">%</span>`;
+    $('cloudSub').textContent = c.cloud_cover > 80 ? 'Kapalı hava' : c.cloud_cover > 40 ? 'Parçalı bulutlu' : 'Açık';
+
+    // -- RÜZGAR --
+    const ws = Math.round(c.wind_speed_10m);
+    const wg = Math.round(c.wind_gusts_10m);
+    const wd = c.wind_direction_10m;
+    $('windSpeed').innerHTML = `${ws}<span style="font-size:14px;font-weight:400;color:var(--muted);"> km/sa</span>`;
+    $('windGust').textContent = wg;
+    $('windDir').textContent = `${windDirLabel(wd)} (${Math.round(wd)}°)`;
+    $('windArrow').setAttribute('transform', `rotate(${wd}, 50, 50)`);
+    $('windRisk').textContent = ws > 30 ? '⚠️ İlaçlama yapma!' : ws > 20 ? 'Dikkatli ol' : '✓ Güvenli';
+    $('windRisk').style.color = ws > 30 ? 'var(--red)' : ws > 20 ? 'var(--amber)' : 'var(--green)';
+
+    // -- SULAMA KARARI (ETc = ET0 * Kc=1.15, net = ETc - yağış) --
+    const et0 = c.et0_fao_evapotranspiration ?? 0;
+    const dailyET0 = d.et0_fao_evapotranspiration?.[0] ?? et0;
+    const etc = dailyET0 * 1.15;
+    const dailyPrecip = d.precipitation_sum?.[0] ?? precip;
+    const netIrr = Math.max(0, etc - dailyPrecip);
+    $('et0Val').textContent = `${dailyET0.toFixed(2)} mm`;
+    const irrBox = $('irrigationBox');
+    const irrVal = $('irrigationVal');
+    if (dailyPrecip >= etc) {
+      irrBox.className = 'decision-box no-irr';
+      irrVal.textContent = '✓ Sulama gerekmiyor (yağış yeterli)';
+    } else {
+      irrBox.className = 'decision-box irr-needed';
+      irrVal.textContent = `${netIrr.toFixed(1)} mm sulama gerekiyor`;
+    }
+
+    // -- MİLDİYÖ --
+    const dp = c.dew_point_2m;
+    const risk = diseaseRiskCalc(hum, c.temperature_2m, dp);
+    $('dewPoint').textContent = `${dp.toFixed(1)} °C`;
+    $('diseaseRisk').innerHTML = `<span class="risk-pill risk-${risk}">${risk === 'HIGH' ? '🔴 Yüksek Risk' : risk === 'MEDIUM' ? '🟡 Orta Risk' : '🟢 Düşük Risk'}</span>`;
+    $('diseaseDetail').textContent = risk === 'HIGH'
+      ? `Nem %${hum} + Sıcaklık ${Math.round(c.temperature_2m)}°C → Mildiyö/külleme uyarısı! İlaçlama değerlendirin.`
+      : risk === 'MEDIUM'
+      ? `Nem %${hum} → Takipte kalın, yaprak ıslaklığını izleyin.`
+      : `Koşullar uygun, hastalık riski düşük.`;
+
+    // -- ALERT BAR --
+    const alerts = [];
+    if (risk === 'HIGH') alerts.push('Mildiyö riski yüksek — nem ve yaprak ıslaklığı izleyin');
+    if (ws > 30) alerts.push('Rüzgar hızı yüksek — drone/ilaçlama yasaklı');
+    if (dailyPrecip > 15) alerts.push('Yoğun yağış — sulama sistemi kapalı tutun');
+    const alertBar = $('alertBar');
+    if (alerts.length > 0) {
+      alertBar.classList.add('show');
+      $('alertText').textContent = alerts.join(' · ');
+    } else {
+      alertBar.classList.remove('show');
+    }
+
+    // -- 24 SAATLİK SICAKLIK GRAFİĞİ --
+    const hrs = h.time.slice(nowHour, nowHour + 24);
+    const hLabels = hrs.map(t => t.slice(11,16));
+    const hTemps = h.temperature_2m.slice(nowHour, nowHour + 24);
+    const hRain = h.precipitation_probability.slice(nowHour, nowHour + 24);
+    const hSolar = h.shortwave_radiation.slice(nowHour, nowHour + 24);
+
+    if (chartTemp) chartTemp.destroy();
+    if (chartRain) chartRain.destroy();
+    if (chartSolar) chartSolar.destroy();
+
+    chartTemp = makeChart('chartTemp', 'line', hLabels, [{
+      data: hTemps, borderColor: '#e05252', backgroundColor: 'rgba(224,82,82,0.08)',
+      borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4, label: '°C'
+    }], { title: { display: false } });
+
+    chartRain = makeChart('chartRain', 'bar', hLabels, [{
+      data: hRain, backgroundColor: 'rgba(55,138,221,0.55)', borderRadius: 2, label: '%'
+    }], { min: 0, max: 100 });
+
+    chartSolar = makeChart('chartSolar', 'line', hLabels, [{
+      data: hSolar, borderColor: '#ef9f27', backgroundColor: 'rgba(239,159,39,0.1)',
+      borderWidth: 1.5, pointRadius: 0, fill: true, tension: 0.4, label: 'W/m²'
+    }], {});
+
+    // solar peak
+    const peakSolar = Math.max(...hSolar);
+    $('solarNow').textContent = `${Math.round(c.shortwave_radiation ?? 0)} W/m²`;
+    $('solarPeak').textContent = `${Math.round(peakSolar)} W/m²`;
+
+    // -- GÜN DOĞUMU / BATIMI --
+    if (d.sunrise && d.sunset) {
+      $('sunrise').textContent = d.sunrise[0].slice(11,16);
+      $('sunset').textContent = d.sunset[0].slice(11,16);
+    }
+
+    // -- 7 GÜNLÜK TAHMİN --
+    const days = ['Paz','Pzt','Sal','Çar','Per','Cum','Cmt'];
+    let fcHTML = '';
+    for (let i = 0; i < 7; i++) {
+      const dt = new Date(d.time[i]);
+      const dayName = i === 0 ? 'Bugün' : days[dt.getDay()];
+      const icon = wmoIcon(d.weather_code[i], 1);
+      fcHTML += `<div class="fc-day">
+        <div class="fc-label">${dayName}</div>
+        <div class="fc-icon">${icon}</div>
+        <div class="fc-hi">${Math.round(d.temperature_2m_max[i])}°</div>
+        <div class="fc-lo">${Math.round(d.temperature_2m_min[i])}°</div>
+        <div class="fc-rain">${d.precipitation_sum[i].toFixed(1)}mm</div>
+      </div>`;
+    }
+    $('forecastRow').innerHTML = fcHTML;
+
+    // -- TOPRAK NEM BARLARI --
+    const sm = [
+      { label: '0–1 cm', val: h.soil_moisture_0_to_1cm?.[nowHour], max: 0.5 },
+      { label: '1–3 cm', val: h.soil_moisture_1_to_3cm?.[nowHour], max: 0.5 },
+      { label: '3–9 cm', val: h.soil_moisture_3_to_9cm?.[nowHour], max: 0.5 },
+    ];
+    const fc_ranges = [60, 80];
+    let soilHTML = '';
+    for (const s of sm) {
+      const pct = s.val != null ? Math.min(100, (s.val / s.max) * 100) : null;
+      const color = pct == null ? '#ccc' : pct > 80 ? '#e05252' : pct > 40 ? '#1d9e75' : '#ef9f27';
+      const valStr = s.val != null ? `${(s.val * 100).toFixed(1)}%` : 'N/A';
+      soilHTML += `<div class="soil-item">
+        <div class="s-label">${s.label}</div>
+        <div class="soil-bar-wrap"><div class="soil-bar" style="width:${pct ?? 0}%; background:${color};"></div></div>
+        <div class="s-val">${valStr}</div>
+      </div>`;
+    }
+    $('soilBars').innerHTML = soilHTML + `<div style="font-size:11px;color:var(--muted);margin-top:8px;">Domates ideal: %40–80 field capacity</div>`;
+
+    // -- HAVA KALİTESİ --
+    const pm10v = a.pm10 ?? 0;
+    const pm25v = a.pm2_5 ?? 0;
+    const o3v = a.ozone ?? 0;
+    const aqiv = a.european_aqi ?? 0;
+
+    $('pm10').innerHTML = `${Math.round(pm10v)}<span class="kpi-unit"> µg/m³</span>`;
+    $('pm10s').textContent = pmLabel(pm10v, [20, 40]);
+    $('pm25').innerHTML = `${Math.round(pm25v)}<span class="kpi-unit"> µg/m³</span>`;
+    $('pm25s').textContent = pmLabel(pm25v, [10, 25]);
+    $('o3').innerHTML = `${Math.round(o3v)}<span class="kpi-unit"> µg/m³</span>`;
+    $('o3s').textContent = o3v < 80 ? 'İyi' : o3v < 120 ? 'Orta' : 'Kötü';
+    $('aqi').textContent = Math.round(aqiv);
+    $('aqis').textContent = aqiLabel(aqiv);
+
+    // -- GÜNCELLEME ZAMANI --
+    $('lastUpdate').textContent = `Son güncelleme: ${now.toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})}`;
+
+  } catch (err) {
+    $('lastUpdate').textContent = 'Hata: API bağlantısı kurulamadı';
+    console.error(err);
+  }
+}
+
+fetchAll();
+setInterval(fetchAll, 10 * 60 * 1000); // 10 dakikada bir otomatik güncelle
+</script>
+</body>
+</html>
